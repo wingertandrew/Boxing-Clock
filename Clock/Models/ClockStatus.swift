@@ -212,7 +212,7 @@ extension ClockStatus {
     }
 
     private var shouldNormalizeMainTimer: Bool {
-        isRunning && !isPaused && !isBetweenRounds && minutes == 0 && seconds == 0 && (endTime != nil || timeStamp != nil)
+        isRunning && !isPaused && !isBetweenRounds && (endTime != nil || timeStamp != nil)
     }
 
     private mutating func updateDecodedStatusKeys(for keys: [CodingKeys]) {

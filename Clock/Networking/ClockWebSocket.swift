@@ -1,9 +1,9 @@
 import Foundation
 import SwiftUI
 
-final class ClockWebSocket: NSObject, ObservableObject, URLSessionWebSocketDelegate {
-    @Published var status: ClockStatus?
-    @Published var isConnected = false
+final class ClockWebSocket: NSObject, URLSessionWebSocketDelegate {
+    var onConnectionChanged: ((Bool) -> Void)?
+    var onStatusPatch: ((ClockStatus) -> Void)?
     
     private var task: URLSessionWebSocketTask?
     private var urlSession: URLSession?
@@ -24,27 +24,27 @@ final class ClockWebSocket: NSObject, ObservableObject, URLSessionWebSocketDeleg
     func disconnect() {
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
-        self.isConnected = false
+        onConnectionChanged?(false)
         urlSession?.finishTasksAndInvalidate()
         urlSession = nil
     }
     
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
         print("WebSocket connected.")
-        self.isConnected = true
+        onConnectionChanged?(true)
         receive()
     }
     
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
         print("WebSocket disconnected.")
-        self.isConnected = false
+        onConnectionChanged?(false)
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let error = error {
             print("WebSocket task completed with error: \(error.localizedDescription)")
-            self.isConnected = false
         }
+        onConnectionChanged?(false)
     }
 
     private func receive() {
@@ -59,21 +59,9 @@ final class ClockWebSocket: NSObject, ObservableObject, URLSessionWebSocketDeleg
                         let decoder = JSONDecoder()
                         decoder.keyDecodingStrategy = .convertFromSnakeCase
                         if let wsMessage = try? decoder.decode(WSMessage.self, from: data),
-                           wsMessage.type == "status" {
-                            if var patch = wsMessage.data {
-                                let now = Date()
-                                patch.normalizeTimers(currentDate: now)
-
-                                if var currentStatus = self?.status {
-                                    var merged = currentStatus.merging(patch)
-                                    merged.normalizeTimers(currentDate: now)
-                                    self?.status = merged
-                                } else {
-                                    self?.status = patch
-                                }
-                            } else {
-                                self?.status = nil
-                            }
+                           wsMessage.type == "status",
+                           let patch = wsMessage.data {
+                            self?.onStatusPatch?(patch)
                         }
                     }
                 case .data:

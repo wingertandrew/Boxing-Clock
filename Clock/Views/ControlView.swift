@@ -64,34 +64,38 @@ struct ControlView: View {
                         .padding()
                 }
                 
+                // Main action button (Start/Pause/Resume)
+                Button(action: {
+                    Task {
+                        do {
+                            if isTimerRunning {
+                                try await clockViewModel.pause()
+                            } else {
+                                try await clockViewModel.start()
+                            }
+                        } catch {
+                            print("Failed to perform action: \(error.localizedDescription)")
+                        }
+                    }
+                }) {
+                    Text(isTimerRunning ? "PAUSE" : (clockViewModel.status?.isPaused == true ? "RESUME" : "START"))
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: 200)
+                        .padding()
+                        .background(isTimerRunning ? Color.orange : (clockViewModel.status?.isPaused == true ? Color.blue : Color.green))
+                        .cornerRadius(10)
+                        .padding(.bottom)
+                }
+                .disabled(!clockViewModel.isConnected)
+                
                 HStack(spacing: 10) {
                     Button(action: { Task { try? await clockViewModel.previousRound() } }) {
                         Image(systemName: "backward.end.fill")
                             .font(.title)
                             .padding()
                             .background(Color.gray.opacity(0.5))
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                    .disabled(!clockViewModel.isConnected)
-                    
-                    Button(action: {
-                        Task {
-                            do {
-                                if isTimerRunning {
-                                    try await clockViewModel.pause()
-                                } else {
-                                    try await clockViewModel.start()
-                                }
-                            } catch {
-                                print("Failed to perform action: \(error.localizedDescription)")
-                            }
-                        }
-                    }) {
-                        Image(systemName: isTimerRunning ? "pause.fill" : "play.fill")
-                            .font(.title)
-                            .padding()
-                            .background(Color.gray)
                             .foregroundColor(.white)
                             .cornerRadius(10)
                     }
@@ -136,7 +140,7 @@ struct ControlView: View {
                         .foregroundColor(.white)
                     Spacer()
                 }
-                .padding(.leading)
+                .padding()
                 
                 Spacer()
                 

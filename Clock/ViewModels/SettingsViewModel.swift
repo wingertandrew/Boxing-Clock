@@ -1,8 +1,7 @@
 import Foundation
 import SwiftUI
 
-@MainActor
-final class SettingsViewModel: ObservableObject {
+class SettingsViewModel: ObservableObject {
     @Published var minutes = 3
     @Published var seconds = 0
     @Published var totalRounds = 12
@@ -31,9 +30,12 @@ final class SettingsViewModel: ObservableObject {
     }
     
     func applySettings(clockViewModel: ClockViewModel) async throws {
+        // Apply settings via API calls
         try await clockViewModel.setTime(minutes: minutes, seconds: seconds)
         try await clockViewModel.setRounds(totalRounds)
         try await clockViewModel.setBetweenRounds(enabled: betweenRoundsEnabled, time: betweenRoundsTime)
-        saveSettings()
+        
+        // Fetch the full status to ensure the UI is in sync
+        try? await clockViewModel.fetchStatus()
     }
 }

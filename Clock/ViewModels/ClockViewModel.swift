@@ -11,7 +11,7 @@ final class ClockViewModel: ObservableObject {
     
     private var webSocket: ClockWebSocket?
     private var api: ClockAPI?
-    private var cancellables = Set<AnyCancellable>()
+    private var countdownTimer: Timer?
     
     init() {
         // Load saved server settings
@@ -29,23 +29,17 @@ final class ClockViewModel: ObservableObject {
         UserDefaults.standard.set(serverPort, forKey: "serverPort")
         
         // Initialize API and WebSocket
-        let newApi = ClockAPI(host: serverHost, port: serverPort)
+        self.api = ClockAPI(host: serverHost, port: serverPort)
+        
         let newWebSocket = ClockWebSocket()
-        
-        self.api = newApi
+        newWebSocket.onConnectionChanged = { [weak self] connected in
+            self?.isConnected = connected
+        }
+        newWebSocket.onStatusPatch = { [weak self] patch in
+            self?.applyStatusPatch(patch)
+        }
         self.webSocket = newWebSocket
-        
-        // The WebSocket is the single source of truth for status updates
-        newWebSocket.$status
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.status, on: self)
-            .store(in: &cancellables)
-        
-        newWebSocket.$isConnected
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.isConnected, on: self)
-            .store(in: &cancellables)
-        
+
         // Connect WebSocket
         newWebSocket.connect(host: serverHost, port: serverPort)
         
@@ -59,23 +53,63 @@ final class ClockViewModel: ObservableObject {
         }
     }
     
+    private func applyStatusPatch(_ patch: ClockStatus) {
+        var mutablePatch = patch
+        let now = Date()
+        mutablePatch.normalizeTimers(currentDate: now)
+
+        if var currentStatus = self.status {
+            var merged = currentStatus.merging(mutablePatch)
+            merged.normalizeTimers(currentDate: now)
+            self.status = merged
+        } else {
+            self.status = mutablePatch
+        }
+        
+        // Manage the countdown timer based on the new status
+        if self.status?.isRunning == true && self.status?.isPaused == false {
+            startTimer()
+        } else {
+            stopTimer()
+        }
+    }
+    
     func disconnect() {
         webSocket?.disconnect()
         webSocket = nil
         api = nil
         self.isConnected = false
         self.status = nil
-        cancellables.forEach { $0.cancel() }
-        cancellables.removeAll()
+        stopTimer()
     }
     
     func fetchStatus() async throws {
         guard let api = api else { return }
-        var newStatus = try await api.fetchStatus()
-        newStatus.normalizeTimers()
-        await MainActor.run {
-            self.status = newStatus
+        let newStatus = try await api.fetchStatus()
+        applyStatusPatch(newStatus)
+    }
+    
+    private func startTimer() {
+        // Ensure we don't have multiple timers running
+        stopTimer()
+        // Start a new timer that updates the countdown every second
+        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.updateCountdown()
         }
+    }
+    
+    private func stopTimer() {
+        countdownTimer?.invalidate()
+        countdownTimer = nil
+    }
+
+    private func updateCountdown() {
+        guard var currentStatus = self.status else {
+            stopTimer()
+            return
+        }
+        currentStatus.normalizeTimers()
+        self.status = currentStatus
     }
     
     // All actions simply send a command. The UI will update when the new
