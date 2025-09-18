@@ -37,7 +37,9 @@ final class ClockAPI {
     func fetchStatus() async throws -> ClockStatus {
         let url = baseURL.appendingPathComponent("status")
         let (data, _) = try await URLSession.shared.data(from: url)
-        return try JSONDecoder().decode(ClockStatus.self, from: data)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(ClockStatus.self, from: data)
     }
 }
 
