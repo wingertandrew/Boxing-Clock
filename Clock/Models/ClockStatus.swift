@@ -26,7 +26,7 @@ struct ClockStatus: Codable, Equatable {
     var apiVersion: String?
     var connectionProtocol: String?
 
-    private var hasDecodedStatusKeys: Bool?
+    private var decodedStatusKeys: Set<CodingKeys>?
 
     enum CodingKeys: String, CodingKey {
         case minutes
@@ -59,7 +59,7 @@ struct ClockStatus: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
-        hasDecodedStatusKeys = !container.allKeys.isEmpty
+        decodedStatusKeys = Set(container.allKeys)
 
         minutes = try container.decodeIfPresent(Int.self, forKey: .minutes) ?? 0
         seconds = try container.decodeIfPresent(Int.self, forKey: .seconds) ?? 0
@@ -90,11 +90,82 @@ struct ClockStatus: Codable, Equatable {
 extension ClockStatus {
     /// Returns `true` when at least one property differs from the default `ClockStatus` value.
     var hasAnyStatusFields: Bool {
-        if let hasDecodedStatusKeys {
-            return hasDecodedStatusKeys
+        if let decodedStatusKeys {
+            return !decodedStatusKeys.isEmpty
         }
 
         return self != ClockStatus()
+    }
+}
+
+extension ClockStatus {
+    func merging(_ patch: ClockStatus) -> ClockStatus {
+        guard let patchKeys = patch.decodedStatusKeys else {
+            return patch.hasAnyStatusFields ? patch : self
+        }
+
+        if patchKeys.isEmpty {
+            return self
+        }
+
+        var merged = self
+
+        for key in patchKeys {
+            switch key {
+            case .minutes:
+                merged.minutes = patch.minutes
+            case .seconds:
+                merged.seconds = patch.seconds
+            case .currentRound:
+                merged.currentRound = patch.currentRound
+            case .totalRounds:
+                merged.totalRounds = patch.totalRounds
+            case .isRunning:
+                merged.isRunning = patch.isRunning
+            case .isPaused:
+                merged.isPaused = patch.isPaused
+            case .elapsedMinutes:
+                merged.elapsedMinutes = patch.elapsedMinutes
+            case .elapsedSeconds:
+                merged.elapsedSeconds = patch.elapsedSeconds
+            case .isBetweenRounds:
+                merged.isBetweenRounds = patch.isBetweenRounds
+            case .betweenRoundsMinutes:
+                merged.betweenRoundsMinutes = patch.betweenRoundsMinutes
+            case .betweenRoundsSeconds:
+                merged.betweenRoundsSeconds = patch.betweenRoundsSeconds
+            case .betweenRoundsEnabled:
+                merged.betweenRoundsEnabled = patch.betweenRoundsEnabled
+            case .betweenRoundsTime:
+                merged.betweenRoundsTime = patch.betweenRoundsTime
+            case .warningLeadTime:
+                merged.warningLeadTime = patch.warningLeadTime
+            case .warningSoundPath:
+                merged.warningSoundPath = patch.warningSoundPath
+            case .endSoundPath:
+                merged.endSoundPath = patch.endSoundPath
+            case .ntpSyncEnabled:
+                merged.ntpSyncEnabled = patch.ntpSyncEnabled
+            case .ntpOffset:
+                merged.ntpOffset = patch.ntpOffset
+            case .endTime:
+                merged.endTime = patch.endTime
+            case .timeStamp:
+                merged.timeStamp = patch.timeStamp
+            case .serverTime:
+                merged.serverTime = patch.serverTime
+            case .apiVersion:
+                merged.apiVersion = patch.apiVersion
+            case .connectionProtocol:
+                merged.connectionProtocol = patch.connectionProtocol
+            }
+        }
+
+        var combinedKeys = self.decodedStatusKeys ?? Set<CodingKeys>()
+        combinedKeys.formUnion(patchKeys)
+        merged.decodedStatusKeys = combinedKeys
+
+        return merged
     }
 }
 

@@ -28,4 +28,22 @@ final class StatusDecodingTests: XCTestCase {
         XCTAssertEqual(message.data?.minutes, 0)
         XCTAssertEqual(message.data?.seconds, 0)
     }
+
+    func testWebSocketPayloadMergesIntoExistingStatus() throws {
+        var existingStatus = ClockStatus()
+        existingStatus.minutes = 2
+        existingStatus.seconds = 10
+        existingStatus.currentRound = 3
+
+        let payload = Data(#"{"type":"status","data":{"seconds":45}}"#.utf8)
+
+        let message = try decoder.decode(WSMessage.self, from: payload)
+        let patch = try XCTUnwrap(message.data)
+
+        let mergedStatus = existingStatus.merging(patch)
+
+        XCTAssertEqual(mergedStatus.minutes, 2)
+        XCTAssertEqual(mergedStatus.seconds, 45)
+        XCTAssertEqual(mergedStatus.currentRound, 3)
+    }
 }
