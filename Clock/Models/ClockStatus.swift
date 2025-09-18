@@ -196,3 +196,168 @@ extension ClockStatus {
         lhs.connectionProtocol == rhs.connectionProtocol
     }
 }
+
+extension ClockStatus {
+    mutating func normalizeTimers(currentDate: Date = Date()) {
+        guard shouldNormalizeMainTimer,
+              let remainingSeconds = computeMainTimerSeconds(currentDate: currentDate) else {
+            return
+        }
+
+        updateDecodedStatusKeys(for: [.minutes, .seconds])
+        minutes = remainingSeconds / 60
+        seconds = remainingSeconds % 60
+    }
+
+    private var shouldNormalizeMainTimer: Bool {
+        isRunning && !isPaused && !isBetweenRounds && minutes == 0 && seconds == 0 && (endTime != nil || timeStamp != nil)
+    }
+
+    private mutating func updateDecodedStatusKeys(for keys: [CodingKeys]) {
+        if decodedStatusKeys == nil {
+            decodedStatusKeys = []
+        }
+
+        for key in keys {
+            decodedStatusKeys?.insert(key)
+        }
+    }
+
+    private func computeMainTimerSeconds(currentDate: Date) -> Int? {
+        let timeStampResult = ClockStatusDateParser.parseTimeStamp(timeStamp, serverTime: serverTime)
+        let offset = timeStampResult?.offset
+        let timeStampDate = timeStampResult?.date
+
+        guard let endDate = ClockStatusDateParser.parseEndTime(endTime, appliedOffset: offset) else {
+            return nil
+        }
+
+        var referenceDate = currentDate
+
+        if ntpSyncEnabled, ntpOffset != 0 {
+            referenceDate = referenceDate.addingTimeInterval(TimeInterval(ntpOffset) / 1000.0)
+        }
+
+        if let timeStampDate {
+            let serverRemaining = endDate.timeIntervalSince(timeStampDate)
+            if serverRemaining.isFinite {
+                let elapsedSinceStamp = referenceDate.timeIntervalSince(timeStampDate)
+                let remaining = Int((serverRemaining - elapsedSinceStamp).rounded(.down))
+                return max(remaining, 0)
+            }
+        }
+
+        let remaining = Int(endDate.timeIntervalSince(referenceDate).rounded(.down))
+        return max(remaining, 0)
+    }
+}
+
+private enum ClockStatusDateParser {
+    private static let iso8601WithFractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let iso8601: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    private static let fallbackFormatters: [DateFormatter] = {
+        let patterns = [
+            "yyyy-MM-dd HH:mm:ss.SSSSSS",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",
+            "yyyy-MM-dd'T'HH:mm:ss"
+        ]
+
+        var formatters: [DateFormatter] = []
+
+        for pattern in patterns {
+            let utcFormatter = DateFormatter()
+            utcFormatter.locale = Locale(identifier: "en_US_POSIX")
+            utcFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+            utcFormatter.dateFormat = pattern
+            formatters.append(utcFormatter)
+
+            let localFormatter = DateFormatter()
+            localFormatter.locale = Locale(identifier: "en_US_POSIX")
+            localFormatter.timeZone = TimeZone.current
+            localFormatter.dateFormat = pattern
+            formatters.append(localFormatter)
+        }
+
+        return formatters
+    }()
+
+    static func parseTimeStamp(_ timeStamp: String?, serverTime: Int?) -> (date: Date, offset: TimeInterval)? {
+        let parsed = parse(timeStamp)
+
+        if let parsed {
+            if let serverTime {
+                let serverDate = date(fromServerTime: serverTime)
+                let delta = serverDate.timeIntervalSince(parsed)
+                if abs(delta) > 1 {
+                    return (parsed.addingTimeInterval(delta), delta)
+                }
+            }
+
+            return (parsed, 0)
+        }
+
+        if let serverTime {
+            let serverDate = date(fromServerTime: serverTime)
+            return (serverDate, 0)
+        }
+
+        return nil
+    }
+
+    static func parseEndTime(_ endTime: String?, appliedOffset: TimeInterval?) -> Date? {
+        guard var date = parse(endTime) else { return nil }
+
+        if let offset = appliedOffset, abs(offset) > 1 {
+            date = date.addingTimeInterval(offset)
+        }
+
+        return date
+    }
+
+    private static func parse(_ string: String?) -> Date? {
+        guard let string = string, !string.isEmpty else { return nil }
+
+        if let date = iso8601WithFractional.date(from: string) {
+            return date
+        }
+
+        if let date = iso8601.date(from: string) {
+            return date
+        }
+
+        for formatter in fallbackFormatters {
+            if let date = formatter.date(from: string) {
+                return date
+            }
+        }
+
+        if let numericValue = Double(string) {
+            if numericValue > 9_999_999_999 {
+                return Date(timeIntervalSince1970: numericValue / 1000.0)
+            }
+
+            return Date(timeIntervalSince1970: numericValue)
+        }
+
+        return nil
+    }
+
+    private static func date(fromServerTime serverTime: Int) -> Date {
+        if serverTime > 9_999_999_999 {
+            return Date(timeIntervalSince1970: TimeInterval(serverTime) / 1000.0)
+        }
+
+        return Date(timeIntervalSince1970: TimeInterval(serverTime))
+    }
+}
