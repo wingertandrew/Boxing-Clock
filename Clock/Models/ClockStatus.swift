@@ -26,6 +26,8 @@ struct ClockStatus: Codable, Equatable {
     var apiVersion: String?
     var connectionProtocol: String?
 
+    private var hasDecodedStatusKeys: Bool?
+
     enum CodingKeys: String, CodingKey {
         case minutes
         case seconds
@@ -57,6 +59,8 @@ struct ClockStatus: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
+        hasDecodedStatusKeys = !container.allKeys.isEmpty
+
         minutes = try container.decodeIfPresent(Int.self, forKey: .minutes) ?? 0
         seconds = try container.decodeIfPresent(Int.self, forKey: .seconds) ?? 0
         currentRound = try container.decodeIfPresent(Int.self, forKey: .currentRound) ?? 0
@@ -86,8 +90,38 @@ struct ClockStatus: Codable, Equatable {
 extension ClockStatus {
     /// Returns `true` when at least one property differs from the default `ClockStatus` value.
     var hasAnyStatusFields: Bool {
+        if let hasDecodedStatusKeys {
+            return hasDecodedStatusKeys
+        }
 
-        self != ClockStatus()
+        return self != ClockStatus()
+    }
+}
 
+extension ClockStatus {
+    static func == (lhs: ClockStatus, rhs: ClockStatus) -> Bool {
+        lhs.minutes == rhs.minutes &&
+        lhs.seconds == rhs.seconds &&
+        lhs.currentRound == rhs.currentRound &&
+        lhs.totalRounds == rhs.totalRounds &&
+        lhs.isRunning == rhs.isRunning &&
+        lhs.isPaused == rhs.isPaused &&
+        lhs.elapsedMinutes == rhs.elapsedMinutes &&
+        lhs.elapsedSeconds == rhs.elapsedSeconds &&
+        lhs.isBetweenRounds == rhs.isBetweenRounds &&
+        lhs.betweenRoundsMinutes == rhs.betweenRoundsMinutes &&
+        lhs.betweenRoundsSeconds == rhs.betweenRoundsSeconds &&
+        lhs.betweenRoundsEnabled == rhs.betweenRoundsEnabled &&
+        lhs.betweenRoundsTime == rhs.betweenRoundsTime &&
+        lhs.warningLeadTime == rhs.warningLeadTime &&
+        lhs.warningSoundPath == rhs.warningSoundPath &&
+        lhs.endSoundPath == rhs.endSoundPath &&
+        lhs.ntpSyncEnabled == rhs.ntpSyncEnabled &&
+        lhs.ntpOffset == rhs.ntpOffset &&
+        lhs.endTime == rhs.endTime &&
+        lhs.timeStamp == rhs.timeStamp &&
+        lhs.serverTime == rhs.serverTime &&
+        lhs.apiVersion == rhs.apiVersion &&
+        lhs.connectionProtocol == rhs.connectionProtocol
     }
 }
