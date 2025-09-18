@@ -83,7 +83,7 @@ final class ClockAPI {
         throw ClockAPIError.unexpectedStatusPayload
     }
 
-    private func decodeStatusPayload(from data: Data) -> ClockStatus? {
+    func decodeStatusPayload(from data: Data) -> ClockStatus? {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
 
