@@ -30,11 +30,19 @@ struct WSMessage: Codable {
             type = ""
         }
 
-        if let decodedData = try container.decodeIfPresent(ClockStatus.self, forKey: .data) {
+        func decodeStatus(for key: CodingKeys) -> ClockStatus? {
+            guard let status = try? container.decodeIfPresent(ClockStatus.self, forKey: key),
+                  status.hasAnyStatusFields else {
+                return nil
+            }
+            return status
+        }
+
+        if let decodedData = decodeStatus(for: .data) {
             data = decodedData
-        } else if let decodedPayload = try container.decodeIfPresent(ClockStatus.self, forKey: .payload) {
+        } else if let decodedPayload = decodeStatus(for: .payload) {
             data = decodedPayload
-        } else if let decodedStatus = try container.decodeIfPresent(ClockStatus.self, forKey: .status) {
+        } else if let decodedStatus = decodeStatus(for: .status) {
             data = decodedStatus
         } else {
             data = nil
