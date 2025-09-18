@@ -43,7 +43,16 @@ final class ClockAPI {
         let (data, _) = try await URLSession.shared.data(from: url)
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try decoder.decode(StatusEnvelope.self, from: data).status
+
+        if let envelope = try? decoder.decode(StatusEnvelope.self, from: data) {
+            return envelope.status
+        }
+
+        if let status = try? decoder.decode(ClockStatus.self, from: data) {
+            return status
+        }
+
+        throw URLError(.cannotDecodeContentData)
     }
 }
 
