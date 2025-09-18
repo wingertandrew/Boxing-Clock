@@ -200,7 +200,9 @@ extension ClockStatus {
 extension ClockStatus {
     mutating func normalizeTimers(currentDate: Date = Date()) {
         guard shouldNormalizeMainTimer,
+
               let remainingSeconds = computeMainTimerSeconds(currentDate: currentDate) else {
+
             return
         }
 
@@ -343,7 +345,9 @@ private enum ClockStatusDateParser {
         }
 
         if let numericValue = Double(string) {
+
             if numericValue > 9_999_999_999 {
+
                 return Date(timeIntervalSince1970: numericValue / 1000.0)
             }
 
