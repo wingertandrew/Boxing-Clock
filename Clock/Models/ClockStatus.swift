@@ -1,6 +1,6 @@
 import Foundation
 
-struct ClockStatus: Codable {
+struct ClockStatus: Codable, Equatable {
     var minutes: Int = 0
     var seconds: Int = 0
     var currentRound: Int = 0
@@ -80,5 +80,12 @@ struct ClockStatus: Codable {
         serverTime = try container.decodeIfPresent(Int.self, forKey: .serverTime)
         apiVersion = try container.decodeIfPresent(String.self, forKey: .apiVersion)
         connectionProtocol = try container.decodeIfPresent(String.self, forKey: .connectionProtocol)
+    }
+}
+
+extension ClockStatus {
+    /// Returns `true` when at least one property differs from the default `ClockStatus` value.
+    var hasAnyStatusFields: Bool {
+        self != ClockStatus()
     }
 }

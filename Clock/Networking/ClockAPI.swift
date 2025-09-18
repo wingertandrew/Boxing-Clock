@@ -87,19 +87,22 @@ final class ClockAPI {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
 
-        if let envelope = try? decoder.decode(StatusEnvelope.self, from: data) {
+        if let envelope = try? decoder.decode(StatusEnvelope.self, from: data),
+           envelope.status.hasAnyStatusFields {
             return envelope.status
         }
 
 
         if let message = try? decoder.decode(WSMessage.self, from: data),
-           let status = message.data {
+           let status = message.data,
+           status.hasAnyStatusFields {
             return status
         }
 
 
 
-        if let status = try? decoder.decode(ClockStatus.self, from: data) {
+        if let status = try? decoder.decode(ClockStatus.self, from: data),
+           status.hasAnyStatusFields {
             return status
         }
 
@@ -116,7 +119,8 @@ final class ClockAPI {
             if dictionaryContainsStatusData(dictionary),
                JSONSerialization.isValidJSONObject(dictionary),
                let data = try? JSONSerialization.data(withJSONObject: dictionary),
-               let status = try? decoder.decode(ClockStatus.self, from: data) {
+               let status = try? decoder.decode(ClockStatus.self, from: data),
+               status.hasAnyStatusFields {
                 return status
             }
 
