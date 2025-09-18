@@ -91,14 +91,18 @@ final class ClockAPI {
             return envelope.status
         }
 
+
         if let message = try? decoder.decode(WSMessage.self, from: data),
            let status = message.data {
             return status
         }
 
+
+
         if let status = try? decoder.decode(ClockStatus.self, from: data) {
             return status
         }
+
 
         guard let jsonObject = try? JSONSerialization.jsonObject(with: data) else {
             return nil
@@ -141,6 +145,7 @@ final class ClockAPI {
         }
 
         return false
+
     }
 }
 
