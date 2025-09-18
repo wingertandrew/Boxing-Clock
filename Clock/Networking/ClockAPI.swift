@@ -1,5 +1,9 @@
 import Foundation
 
+struct StatusEnvelope: Decodable {
+    let status: ClockStatus
+}
+
 // Struct for between rounds configuration
 struct BetweenRoundsConfig: Codable {
     let enabled: Bool
@@ -39,7 +43,7 @@ final class ClockAPI {
         let (data, _) = try await URLSession.shared.data(from: url)
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try decoder.decode(ClockStatus.self, from: data)
+        return try decoder.decode(StatusEnvelope.self, from: data).status
     }
 }
 
