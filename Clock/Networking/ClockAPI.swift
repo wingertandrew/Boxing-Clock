@@ -119,7 +119,8 @@ final class ClockAPI {
             if dictionaryContainsStatusData(dictionary),
                JSONSerialization.isValidJSONObject(dictionary),
                let data = try? JSONSerialization.data(withJSONObject: dictionary),
-               let status = try? decoder.decode(ClockStatus.self, from: data) {
+               let status = try? decoder.decode(ClockStatus.self, from: data),
+               status.hasAnyStatusFields {
                 return status
             }
 
