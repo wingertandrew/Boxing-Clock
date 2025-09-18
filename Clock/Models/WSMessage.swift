@@ -6,6 +6,7 @@ struct WSMessage: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case type
+        case event
         case data
         case status
         case payload
@@ -18,7 +19,16 @@ struct WSMessage: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        type = try container.decode(String.self, forKey: .type)
+
+        if let decodedType = try container.decodeIfPresent(String.self, forKey: .type) {
+            type = decodedType
+        } else if let decodedEvent = try container.decodeIfPresent(String.self, forKey: .event) {
+            type = decodedEvent
+        } else if container.contains(.data) || container.contains(.payload) || container.contains(.status) {
+            type = "status"
+        } else {
+            type = ""
+        }
 
         if let decodedData = try container.decodeIfPresent(ClockStatus.self, forKey: .data) {
             data = decodedData

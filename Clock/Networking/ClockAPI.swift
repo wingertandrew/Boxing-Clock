@@ -4,6 +4,14 @@ struct StatusEnvelope: Decodable {
     let status: ClockStatus
 }
 
+enum ClockAPIError: LocalizedError {
+    case unexpectedStatusPayload
+
+    var errorDescription: String? {
+        "The server returned the status in an unexpected format."
+    }
+}
+
 // Struct for between rounds configuration
 struct BetweenRoundsConfig: Codable {
     let enabled: Bool
@@ -22,6 +30,32 @@ struct RoundsConfig: Codable {
 }
 
 final class ClockAPI {
+    private static let statusFieldKeys: Set<String> = [
+        "minutes",
+        "seconds",
+        "currentround",
+        "totalrounds",
+        "isrunning",
+        "ispaused",
+        "elapsedminutes",
+        "elapsedseconds",
+        "isbetweenrounds",
+        "betweenroundsminutes",
+        "betweenroundsseconds",
+        "betweenroundsenabled",
+        "betweenroundstime",
+        "warningleadtime",
+        "warningsoundpath",
+        "endsoundpath",
+        "ntpsyncenabled",
+        "ntpoffset",
+        "endtime",
+        "timestamp",
+        "servertime",
+        "apiversion",
+        "connectionprotocol",
+    ]
+
     var baseURL: URL
 
     init(host: String, port: Int = 4040) {
@@ -41,6 +75,15 @@ final class ClockAPI {
     func fetchStatus() async throws -> ClockStatus {
         let url = baseURL.appendingPathComponent("status")
         let (data, _) = try await URLSession.shared.data(from: url)
+
+        if let status = decodeStatusPayload(from: data) {
+            return status
+        }
+
+        throw ClockAPIError.unexpectedStatusPayload
+    }
+
+    private func decodeStatusPayload(from data: Data) -> ClockStatus? {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
 
@@ -48,11 +91,61 @@ final class ClockAPI {
             return envelope.status
         }
 
+
+        if let message = try? decoder.decode(WSMessage.self, from: data),
+           let status = message.data {
+            return status
+        }
+
+
+
         if let status = try? decoder.decode(ClockStatus.self, from: data) {
             return status
         }
 
-        throw URLError(.cannotDecodeContentData)
+
+        guard let jsonObject = try? JSONSerialization.jsonObject(with: data) else {
+            return nil
+        }
+
+        return extractStatus(from: jsonObject, using: decoder)
+    }
+
+    private func extractStatus(from object: Any, using decoder: JSONDecoder) -> ClockStatus? {
+        if let dictionary = object as? [String: Any] {
+            if dictionaryContainsStatusData(dictionary),
+               JSONSerialization.isValidJSONObject(dictionary),
+               let data = try? JSONSerialization.data(withJSONObject: dictionary),
+               let status = try? decoder.decode(ClockStatus.self, from: data) {
+                return status
+            }
+
+            for value in dictionary.values {
+                if let status = extractStatus(from: value, using: decoder) {
+                    return status
+                }
+            }
+        } else if let array = object as? [Any] {
+            for element in array {
+                if let status = extractStatus(from: element, using: decoder) {
+                    return status
+                }
+            }
+        }
+
+        return nil
+    }
+
+    private func dictionaryContainsStatusData(_ dictionary: [String: Any]) -> Bool {
+        for key in dictionary.keys {
+            let normalizedKey = key.replacingOccurrences(of: "_", with: "").lowercased()
+            if Self.statusFieldKeys.contains(normalizedKey) {
+                return true
+            }
+        }
+
+        return false
+
     }
 }
 
