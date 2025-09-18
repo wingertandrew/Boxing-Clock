@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ConnectionView: View {
-    @ObservedObject var clockViewModel: ClockViewModel
+    @EnvironmentObject var clockViewModel: ClockViewModel
     
     var body: some View {
         NavigationView {

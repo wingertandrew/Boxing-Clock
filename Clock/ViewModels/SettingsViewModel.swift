@@ -9,10 +9,7 @@ final class SettingsViewModel: ObservableObject {
     @Published var betweenRoundsEnabled = true
     @Published var betweenRoundsTime = 60
     
-    private let clockViewModel: ClockViewModel
-    
-    init(clockViewModel: ClockViewModel) {
-        self.clockViewModel = clockViewModel
+    init() {
         // Load saved settings
         loadSettings()
     }
@@ -33,7 +30,7 @@ final class SettingsViewModel: ObservableObject {
         betweenRoundsTime = UserDefaults.standard.integer(forKey: "defaultBetweenRoundsTime") != 0 ? UserDefaults.standard.integer(forKey: "defaultBetweenRoundsTime") : 60
     }
     
-    func applySettings() async throws {
+    func applySettings(clockViewModel: ClockViewModel) async throws {
         try await clockViewModel.setTime(minutes: minutes, seconds: seconds)
         try await clockViewModel.setRounds(totalRounds)
         try await clockViewModel.setBetweenRounds(enabled: betweenRoundsEnabled, time: betweenRoundsTime)

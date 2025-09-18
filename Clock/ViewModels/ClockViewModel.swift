@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 @MainActor
 final class ClockViewModel: ObservableObject {
@@ -10,6 +11,7 @@ final class ClockViewModel: ObservableObject {
     
     private var webSocket: ClockWebSocket?
     private var api: ClockAPI?
+    private var cancellables = Set<AnyCancellable>()
     
     init() {
         // Load saved server settings
@@ -22,35 +24,37 @@ final class ClockViewModel: ObservableObject {
     }
     
     func connect() {
+        // Save server settings
+        UserDefaults.standard.set(serverHost, forKey: "serverHost")
+        UserDefaults.standard.set(serverPort, forKey: "serverPort")
+        
+        // Initialize API and WebSocket
+        let newApi = ClockAPI(host: serverHost, port: serverPort)
+        let newWebSocket = ClockWebSocket()
+        
+        self.api = newApi
+        self.webSocket = newWebSocket
+        
+        // The WebSocket is the single source of truth for status updates
+        newWebSocket.$status
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.status, on: self)
+            .store(in: &cancellables)
+        
+        newWebSocket.$isConnected
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.isConnected, on: self)
+            .store(in: &cancellables)
+        
+        // Connect WebSocket
+        newWebSocket.connect(host: serverHost, port: serverPort)
+        
+        // Fetch initial status
         Task {
-            // Save server settings
-            UserDefaults.standard.set(serverHost, forKey: "serverHost")
-            UserDefaults.standard.set(serverPort, forKey: "serverPort")
-            
-            // Initialize API and WebSocket
-            let newApi = ClockAPI(host: serverHost, port: serverPort)
-            let newWebSocket = ClockWebSocket()
-            
-            // Bind WebSocket status to our published property
-            newWebSocket.$status
-                .receive(on: DispatchQueue.main)
-                .assign(to: &$status)
-            
-            // Connect WebSocket
-            newWebSocket.connect(host: serverHost, port: serverPort)
-            
-            // Fetch initial status
             do {
-                let initialStatus = try await newApi.fetchStatus()
-                await MainActor.run {
-                    self.status = initialStatus
-                    self.api = newApi
-                    self.webSocket = newWebSocket
-                    self.isConnected = true
-                }
+                try await fetchStatus()
             } catch {
-                print("Failed to connect: \(error)")
-                newWebSocket.disconnect()
+                print("Failed to fetch initial status: \(error.localizedDescription)")
             }
         }
     }
@@ -61,6 +65,8 @@ final class ClockViewModel: ObservableObject {
         api = nil
         self.isConnected = false
         self.status = nil
+        cancellables.forEach { $0.cancel() }
+        cancellables.removeAll()
     }
     
     func fetchStatus() async throws {
@@ -70,6 +76,9 @@ final class ClockViewModel: ObservableObject {
             self.status = newStatus
         }
     }
+    
+    // All actions simply send a command. The UI will update when the new
+    // status arrives via the WebSocket.
     
     func start() async throws {
         try await api?.start()

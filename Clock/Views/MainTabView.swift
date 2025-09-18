@@ -1,29 +1,32 @@
 import SwiftUI
 
 struct MainTabView: View {
-    @ObservedObject var clockViewModel: ClockViewModel
+    @EnvironmentObject var clockViewModel: ClockViewModel
     
     var body: some View {
         TabView {
-            ControlView(clockViewModel: clockViewModel)
+            ControlView()
                 .tabItem {
                     Label("Control", systemImage: "timer")
                 }
             
-            SettingsView(clockViewModel: clockViewModel)
+            SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
             
-            StatusView(clockViewModel: clockViewModel)
+            StatusView()
                 .tabItem {
                     Label("Status", systemImage: "info.circle")
                 }
-
-            ConnectionView(clockViewModel: clockViewModel)
+            
+            ConnectionView()
                 .tabItem {
                     Label("Connection", systemImage: "network")
                 }
+        }
+        .onAppear {
+            clockViewModel.connect()
         }
     }
 }

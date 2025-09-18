@@ -1,13 +1,8 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @ObservedObject private var clockViewModel: ClockViewModel
-    @StateObject private var settingsViewModel: SettingsViewModel
-    
-    init(clockViewModel: ClockViewModel) {
-        self.clockViewModel = clockViewModel
-        _settingsViewModel = StateObject(wrappedValue: SettingsViewModel(clockViewModel: clockViewModel))
-    }
+    @EnvironmentObject private var clockViewModel: ClockViewModel
+    @StateObject private var settingsViewModel = SettingsViewModel()
     
     var body: some View {
         Form {
@@ -30,7 +25,7 @@ struct SettingsView: View {
             Section {
                 Button("Apply Settings") {
                     Task {
-                        try? await settingsViewModel.applySettings()
+                        try? await settingsViewModel.applySettings(clockViewModel: clockViewModel)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -38,5 +33,8 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        .onAppear {
+            settingsViewModel.loadSettings()
+        }
     }
 }

@@ -1,52 +1,78 @@
 import Foundation
 import SwiftUI
 
-final class ClockWebSocket: ObservableObject {
+final class ClockWebSocket: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     @Published var status: ClockStatus?
+    @Published var isConnected = false
     
     private var task: URLSessionWebSocketTask?
-    private var isConnected = false
+    private var urlSession: URLSession?
+
+    override init() {
+        super.init()
+    }
 
     func connect(host: String, port: Int = 4040) {
-        // Close existing connection if any
         disconnect()
         
+        urlSession = URLSession(configuration: .default, delegate: self, delegateQueue: OperationQueue.main)
         let url = URL(string: "ws://\(host):\(port)")!
-        task = URLSession.shared.webSocketTask(with: url)
+        task = urlSession!.webSocketTask(with: url)
         task?.resume()
-        isConnected = true
-        receive()
     }
     
     func disconnect() {
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
-        isConnected = false
+        self.isConnected = false
+        urlSession?.finishTasksAndInvalidate()
+        urlSession = nil
+    }
+    
+    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
+        print("WebSocket connected.")
+        self.isConnected = true
+        receive()
+    }
+    
+    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        print("WebSocket disconnected.")
+        self.isConnected = false
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error = error {
+            print("WebSocket task completed with error: \(error.localizedDescription)")
+            self.isConnected = false
+        }
     }
 
     private func receive() {
-        guard isConnected, let task = task else { return }
+        guard let task = task, task.state == .running else { return }
         
         task.receive { [weak self] result in
-            guard let self = self, self.isConnected else { return }
-            
             switch result {
-            case .success(.string(let text)):
-                if let data = text.data(using: .utf8),
-                   let message = try? JSONDecoder().decode(WSMessage.self, from: data),
-                   message.type == "status" {
-                    DispatchQueue.main.async { 
-                        self.status = message.status
+            case .success(let message):
+                switch message {
+                case .string(let text):
+                    if let data = text.data(using: .utf8) {
+                        let decoder = JSONDecoder()
+                        decoder.keyDecodingStrategy = .convertFromSnakeCase
+                        if let wsMessage = try? decoder.decode(WSMessage.self, from: data),
+                           wsMessage.type == "status" {
+                            self?.status = wsMessage.status
+                        }
                     }
+                case .data:
+                    break
+                @unknown default:
+                    break
                 }
+                self?.receive()
             case .failure(let error):
-                print("WebSocket receive error: \(error)")
-            default:
-                break
+                print("WebSocket receive error: \(error.localizedDescription)")
+                self?.disconnect()
             }
-            
-            // Continue receiving messages
-            self.receive()
         }
     }
 }

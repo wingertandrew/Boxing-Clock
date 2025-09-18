@@ -1,11 +1,7 @@
 import SwiftUI
 
 struct StatusView: View {
-    @ObservedObject private var clockViewModel: ClockViewModel
-    
-    init(clockViewModel: ClockViewModel) {
-        self.clockViewModel = clockViewModel
-    }
+    @EnvironmentObject private var clockViewModel: ClockViewModel
     
     var body: some View {
         Form {
