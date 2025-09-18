@@ -61,7 +61,7 @@ struct StatusView: View {
                     }
                 }
                 
-                if let apiVersion = status.api_version {
+                if let apiVersion = status.apiVersion {
                     Section(header: Text("Server Info")) {
                         HStack {
                             Text("API Version")
