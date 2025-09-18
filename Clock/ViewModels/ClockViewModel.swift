@@ -71,7 +71,8 @@ final class ClockViewModel: ObservableObject {
     
     func fetchStatus() async throws {
         guard let api = api else { return }
-        let newStatus = try await api.fetchStatus()
+        var newStatus = try await api.fetchStatus()
+        newStatus.normalizeTimers()
         await MainActor.run {
             self.status = newStatus
         }
