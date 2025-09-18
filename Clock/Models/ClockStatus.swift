@@ -23,6 +23,32 @@ struct ClockStatus: Codable {
     var timeStamp: String?
     // Extras returned by /status
     var serverTime: Int?
-    var api_version: String?
-    var connection_protocol: String?
+    var apiVersion: String?
+    var connectionProtocol: String?
+
+    enum CodingKeys: String, CodingKey {
+        case minutes
+        case seconds
+        case currentRound
+        case totalRounds
+        case isRunning
+        case isPaused
+        case elapsedMinutes
+        case elapsedSeconds
+        case isBetweenRounds
+        case betweenRoundsMinutes
+        case betweenRoundsSeconds
+        case betweenRoundsEnabled
+        case betweenRoundsTime
+        case warningLeadTime
+        case warningSoundPath
+        case endSoundPath
+        case ntpSyncEnabled
+        case ntpOffset
+        case endTime
+        case timeStamp
+        case serverTime
+        case apiVersion = "api_version"
+        case connectionProtocol = "connection_protocol"
+    }
 }
