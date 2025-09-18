@@ -86,6 +86,8 @@ struct ClockStatus: Codable, Equatable {
 extension ClockStatus {
     /// Returns `true` when at least one property differs from the default `ClockStatus` value.
     var hasAnyStatusFields: Bool {
+
         self != ClockStatus()
+
     }
 }
