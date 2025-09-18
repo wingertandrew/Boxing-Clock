@@ -60,7 +60,15 @@ final class ClockWebSocket: NSObject, ObservableObject, URLSessionWebSocketDeleg
                         decoder.keyDecodingStrategy = .convertFromSnakeCase
                         if let wsMessage = try? decoder.decode(WSMessage.self, from: data),
                            wsMessage.type == "status" {
-                            self?.status = wsMessage.data
+                            if let patch = wsMessage.data {
+                                if let currentStatus = self?.status {
+                                    self?.status = currentStatus.merging(patch)
+                                } else {
+                                    self?.status = patch
+                                }
+                            } else {
+                                self?.status = nil
+                            }
                         }
                     }
                 case .data:
