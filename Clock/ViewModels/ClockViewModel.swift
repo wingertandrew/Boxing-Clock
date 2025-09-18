@@ -104,14 +104,24 @@ final class ClockViewModel: ObservableObject {
     }
 
     private func updateCountdown() {
-        guard var currentStatus = self.status else {
+        // Manually decrement the timer for a smooth countdown
+        guard status != nil, status!.isRunning, !status!.isPaused else {
             stopTimer()
             return
         }
-        currentStatus.normalizeTimers()
-        self.status = currentStatus
+
+        if status!.seconds > 0 {
+            status!.seconds -= 1
+        } else if status!.minutes > 0 {
+            status!.minutes -= 1
+            status!.seconds = 59
+        } else {
+            // Timer has reached zero, stop the local countdown.
+            // The server will send a new status (e.g., between rounds).
+            stopTimer()
+        }
     }
-    
+
     // All actions simply send a command. The UI will update when the new
     // status arrives via the WebSocket.
     
