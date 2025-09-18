@@ -82,3 +82,34 @@ struct ClockStatus: Codable {
         connectionProtocol = try container.decodeIfPresent(String.self, forKey: .connectionProtocol)
     }
 }
+
+extension ClockStatus {
+    /// Returns `true` when at least one property differs from the default `ClockStatus` value.
+    var hasAnyStatusFields: Bool {
+        if minutes != 0 { return true }
+        if seconds != 0 { return true }
+        if currentRound != 0 { return true }
+        if totalRounds != 0 { return true }
+        if isRunning { return true }
+        if isPaused { return true }
+        if elapsedMinutes != 0 { return true }
+        if elapsedSeconds != 0 { return true }
+        if isBetweenRounds { return true }
+        if betweenRoundsMinutes != 0 { return true }
+        if betweenRoundsSeconds != 0 { return true }
+        if betweenRoundsEnabled { return true }
+        if betweenRoundsTime != 0 { return true }
+        if warningLeadTime != 0 { return true }
+        if let warningSoundPath = warningSoundPath, !warningSoundPath.isEmpty { return true }
+        if let endSoundPath = endSoundPath, !endSoundPath.isEmpty { return true }
+        if ntpSyncEnabled { return true }
+        if ntpOffset != 0 { return true }
+        if let endTime = endTime, !endTime.isEmpty { return true }
+        if let timeStamp = timeStamp, !timeStamp.isEmpty { return true }
+        if let serverTime = serverTime, serverTime != 0 { return true }
+        if let apiVersion = apiVersion, !apiVersion.isEmpty { return true }
+        if let connectionProtocol = connectionProtocol, !connectionProtocol.isEmpty { return true }
+
+        return false
+    }
+}
