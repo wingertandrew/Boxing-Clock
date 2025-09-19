@@ -164,7 +164,9 @@ struct ControlView: View {
     }
     
     private func getStatusText() -> String {
-        guard let status = clockViewModel.status, status.isRunning else { return "READY" }
+        guard let status = clockViewModel.status else { return "READY" }
+        if status.isBetweenRounds { return "BETWEEN ROUNDS" }
+        guard status.isRunning else { return "READY" }
         return status.isPaused ? "PAUSED" : "RUNNING"
     }
 
