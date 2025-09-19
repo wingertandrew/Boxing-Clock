@@ -3,153 +3,209 @@ import SwiftUI
 struct ControlView: View {
     @EnvironmentObject private var clockViewModel: ClockViewModel
     
-    // A computed property to simplify the view's logic
     private var isTimerRunning: Bool {
-        clockViewModel.status?.isRunning == true && clockViewModel.status?.isPaused == false
+        clockViewModel.status?.isRunning == true && !clockViewModel.status!.isPaused
     }
     
     var body: some View {
-        ZStack {
-            Color.black.edgesIgnoringSafeArea(.all)
-            
-            VStack {
-                HStack {
-                    if let status = clockViewModel.status {
-                        Text(String(format: "ELAPSED: %02d:%02d", status.elapsedMinutes, status.elapsedSeconds))
-                            .foregroundColor(.white)
-                            .padding()
-                    } else {
-                        Text("ELAPSED: 00:00")
-                            .foregroundColor(.white)
-                            .padding()
-                    }
+        GeometryReader { geometry in
+            ZStack {
+                Color.black.edgesIgnoringSafeArea(.all)
+                
+                VStack {
+                    elapsedTimeView()
+                        .padding(.top, 30)
+
                     Spacer()
-                }
-                
-                if let status = clockViewModel.status {
-                    Text(String(format: "%02d:%02d", status.minutes, status.seconds))
-                        .font(.system(size: 150, weight: .bold))
-                        .foregroundColor(.white)
-                } else {
-                    Text("00:00")
-                        .font(.system(size: 150, weight: .bold))
-                        .foregroundColor(.white)
-                }
-                
-                if let status = clockViewModel.status {
-                    Text(status.isRunning ? (status.isPaused ? "PAUSED" : "RUNNING") : "READY")
-                        .font(.title)
-                        .foregroundColor(status.isRunning ? (status.isPaused ? .black : .white) : .black)
-                        .padding()
-                        .background(status.isRunning ? (status.isPaused ? .orange : .green) : .gray)
-                        .cornerRadius(10)
-                } else {
-                    Text("READY")
-                        .font(.title)
-                        .foregroundColor(.black)
-                        .padding()
-                        .background(Color.gray)
-                        .cornerRadius(10)
-                }
-                
-                if let status = clockViewModel.status {
-                    Text("ROUND \(status.currentRound) of \(status.totalRounds)")
-                        .font(.title)
-                        .foregroundColor(.white)
-                        .padding()
-                } else {
-                    Text("ROUND 0 of 0")
-                        .font(.title)
-                        .foregroundColor(.white)
-                        .padding()
-                }
-                
-                // Main action button (Start/Pause/Resume)
-                Button(action: {
-                    Task {
-                        do {
-                            if isTimerRunning {
-                                try await clockViewModel.pause()
-                            } else {
-                                try await clockViewModel.start()
+                    
+                    mainTimerView()
+                    
+                    statusBar()
+                        .padding(.horizontal)
+                        .padding(.top, 10)
+                        .onTapGesture {
+                            Task {
+                                do {
+                                    if isTimerRunning {
+                                        try await clockViewModel.pause()
+                                    } else {
+                                        try await clockViewModel.start()
+                                    }
+                                } catch {
+                                    print("Failed to perform action: \(error.localizedDescription)")
+                                }
                             }
-                        } catch {
-                            print("Failed to perform action: \(error.localizedDescription)")
                         }
-                    }
-                }) {
-                    Text(isTimerRunning ? "PAUSE" : (clockViewModel.status?.isPaused == true ? "RESUME" : "START"))
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: 200)
-                        .padding()
-                        .background(isTimerRunning ? Color.orange : (clockViewModel.status?.isPaused == true ? Color.blue : Color.green))
-                        .cornerRadius(10)
-                        .padding(.bottom)
-                }
-                .disabled(!clockViewModel.isConnected)
-                
-                HStack(spacing: 10) {
-                    Button(action: { Task { try? await clockViewModel.previousRound() } }) {
-                        Image(systemName: "backward.end.fill")
-                            .font(.title)
-                            .padding()
-                            .background(Color.gray.opacity(0.5))
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                    .disabled(!clockViewModel.isConnected)
                     
-                    Button(action: { Task { try? await clockViewModel.nextRound() } }) {
-                        Image(systemName: "forward.end.fill")
-                            .font(.title)
-                            .padding()
-                            .background(Color.gray.opacity(0.5))
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                    .disabled(!clockViewModel.isConnected)
-                    
-                    Button(action: { Task { try? await clockViewModel.resetTime() } }) {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.title)
-                            .padding()
-                            .background(Color.gray.opacity(0.5))
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                    .disabled(!clockViewModel.isConnected)
-                    
-                    Button(action: { Task { try? await clockViewModel.resetRounds() } }) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.title)
-                            .padding()
-                            .background(Color.gray.opacity(0.5))
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                    .disabled(!clockViewModel.isConnected)
-                }
-                
-                HStack {
-                    Circle()
-                        .fill(clockViewModel.isConnected ? Color.green : Color.red)
-                        .frame(width: 10, height: 10)
-                    Text(clockViewModel.serverHost)
-                        .foregroundColor(.white)
                     Spacer()
+                    
+                    HStack {
+                        connectionInfoView()
+                        Spacer()
+                        roundInfoView()
+                    }
+                    .padding(.horizontal, 30)
+
+                    controlButtons()
+                        .padding(.bottom, 30)
                 }
-                .padding()
+                .frame(width: geometry.size.width, height: geometry.size.height)
                 
-                Spacer()
-                
-                if let status = clockViewModel.status, status.betweenRoundsEnabled {
-                    Text(String(format: "Between Rounds Timer: %02d:%02d", status.betweenRoundsMinutes, status.betweenRoundsSeconds))
-                        .foregroundColor(.purple)
-                        .padding()
-                }
             }
         }
+        .statusBar(hidden: true)
+    }
+    
+    @ViewBuilder
+    private func statusBar() -> some View {
+        Label {
+            Text(getStatusText())
+                .digitalFont(size: 24)
+        } icon: {
+            Image(systemName: getStatusIconName())
+                .font(.system(size: 20, weight: .semibold))
+        }
+        .foregroundColor(.black)
+        .frame(maxWidth: .infinity)
+        .padding()
+        .background(getStatusColor())
+        .cornerRadius(12)
+    }
+    
+    @ViewBuilder
+    private func mainTimerView() -> some View {
+        if let status = clockViewModel.status {
+            Text(String(format: "%02d:%02d", status.minutes, status.seconds))
+                .digitalFont(size: 150)
+                .foregroundColor(.white)
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+        } else {
+            Text("00:00")
+                .digitalFont(size: 150)
+                .foregroundColor(.white)
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+        }
+    }
+    
+    @ViewBuilder
+    private func elapsedTimeView() -> some View {
+        if let status = clockViewModel.status {
+            Text(String(format: "ELAPSED: %02d:%02d", status.elapsedMinutes, status.elapsedSeconds))
+                .digitalFont(size: 36)
+                .foregroundColor(.white)
+        } else {
+            Text("ELAPSED: 00:00")
+                .digitalFont(size: 36)
+                .foregroundColor(.white)
+        }
+    }
+    
+    @ViewBuilder
+    private func connectionInfoView() -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(clockViewModel.isConnected ? .green : .red)
+                .frame(width: 10, height: 10)
+            Text(clockViewModel.serverHost)
+                .font(.body)
+                .foregroundColor(.gray)
+        }
+    }
+    
+    @ViewBuilder
+    private func roundInfoView() -> some View {
+        Group {
+            if let status = clockViewModel.status {
+                Text("ROUND \(status.currentRound) of \(status.totalRounds)")
+            } else {
+                Text("ROUND 0 of 0")
+            }
+        }
+        .digitalFont(size: 24)
+        .foregroundColor(.white)
+    }
+    
+    @ViewBuilder
+    private func controlButtons() -> some View {
+        HStack(spacing: 10) {
+            Group {
+                controlButton(systemName: "minus") {}
+                controlButton(systemName: "plus") {}
+                controlButton(systemName: "backward.end.fill") {
+                    Task { try? await clockViewModel.previousRound() }
+                }
+                controlButton(systemName: "forward.end.fill") {
+                    Task { try? await clockViewModel.nextRound() }
+                }
+                controlButton(systemName: "arrow.counterclockwise") {
+                    Task { try? await clockViewModel.resetTime() }
+                }
+                controlButton(systemName: "arrow.counterclockwise.circle") {
+                    Task { try? await clockViewModel.resetRounds() }
+                }
+            }
+            .disabled(!clockViewModel.isConnected)
+        }
+    }
+    
+    private func controlButton(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.title2)
+                .frame(minWidth: 50, minHeight: 50)
+                .background(Color.gray.opacity(0.5))
+                .foregroundColor(.white)
+                .cornerRadius(10)
+        }
+    }
+    
+    private func getStatusText() -> String {
+        guard let status = clockViewModel.status, status.isRunning else { return "READY" }
+        return status.isPaused ? "PAUSED" : "RUNNING"
+    }
+
+    private func getStatusIconName() -> String {
+        guard let status = clockViewModel.status, status.isRunning, !status.isPaused else { return "play.fill" }
+        return "pause.fill"
+    }
+
+    private func getStatusColor() -> Color {
+        guard let status = clockViewModel.status, status.isRunning else { return .gray }
+        return status.isPaused ? .yellow : .green
+    }
+}
+
+extension Color {
+    init?(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3: // RGB (12-bit)
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: // RGB (24-bit)
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: // ARGB (32-bit)
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            return nil
+        }
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue: Double(b) / 255,
+            opacity: Double(a) / 255
+        )
+    }
+}
+
+struct ControlView_Previews: PreviewProvider {
+    static var previews: some View {
+        ControlView()
+            .environmentObject(ClockViewModel())
     }
 }

@@ -3,7 +3,7 @@ import SwiftUI
 
 final class ClockWebSocket: NSObject, URLSessionWebSocketDelegate {
     var onConnectionChanged: ((Bool) -> Void)?
-    var onStatusPatch: ((ClockStatus) -> Void)?
+    var onStatusUpdate: ((ClockStatus) -> Void)?
     
     private var task: URLSessionWebSocketTask?
     private var urlSession: URLSession?
@@ -56,16 +56,10 @@ final class ClockWebSocket: NSObject, URLSessionWebSocketDelegate {
                 switch message {
                 case .string(let text):
                     if let data = text.data(using: .utf8) {
-                        let decoder = JSONDecoder()
-                        decoder.keyDecodingStrategy = .convertFromSnakeCase
-                        if let wsMessage = try? decoder.decode(WSMessage.self, from: data),
-                           wsMessage.type == "status",
-                           let patch = wsMessage.data {
-                            self?.onStatusPatch?(patch)
-                        }
+                        self?.decodeAndHandle(data: data)
                     }
-                case .data:
-                    break
+                case .data(let data):
+                    self?.decodeAndHandle(data: data)
                 @unknown default:
                     break
                 }
@@ -74,6 +68,18 @@ final class ClockWebSocket: NSObject, URLSessionWebSocketDelegate {
                 print("WebSocket receive error: \(error.localizedDescription)")
                 self?.disconnect()
             }
+        }
+    }
+    
+    private func decodeAndHandle(data: Data) {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        do {
+            let status = try decoder.decode(ClockStatus.self, from: data)
+            onStatusUpdate?(status)
+        } catch {
+            print("Failed to decode ClockStatus: \(error)")
         }
     }
 }

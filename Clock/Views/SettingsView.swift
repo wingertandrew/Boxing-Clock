@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject private var clockViewModel: ClockViewModel
+    @EnvironmentObject var clockViewModel: ClockViewModel
     @StateObject private var settingsViewModel = SettingsViewModel()
     
     var body: some View {

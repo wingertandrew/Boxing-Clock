@@ -1,5 +1,11 @@
 import Foundation
 
+// A new struct to handle nested time objects from the server
+struct TimeValue: Codable, Equatable {
+    var minutes: Int
+    var seconds: Int
+}
+
 struct ClockStatus: Codable, Equatable {
     var minutes: Int = 0
     var seconds: Int = 0
@@ -20,12 +26,20 @@ struct ClockStatus: Codable, Equatable {
     var ntpSyncEnabled: Bool = false
     var ntpOffset: Int = 0
     var endTime: String?
-    var timeStamp: String?
+    var timeStamp: TimeInterval? // Changed to TimeInterval for direct numeric parsing
     // Extras returned by /status
-    var serverTime: Int?
+    var serverTime: TimeInterval? // Changed to TimeInterval
     var apiVersion: String?
     var connectionProtocol: String?
 
+    // New properties to match the WebSocket log data
+    var initialTime: TimeValue?
+    var startTime: TimeValue?
+    var pauseStartTime: TimeInterval? // Changed to TimeInterval
+    var totalPausedTime: TimeInterval? // Changed to TimeInterval
+    var currentPauseDuration: TimeInterval? // Changed to TimeInterval
+    var lastUpdateTime: TimeInterval? // Changed to TimeInterval
+    
     private var decodedStatusKeys: Set<CodingKeys>?
 
     enum CodingKeys: String, CodingKey {
@@ -52,6 +66,13 @@ struct ClockStatus: Codable, Equatable {
         case serverTime
         case apiVersion = "api_version"
         case connectionProtocol = "connection_protocol"
+        // New keys
+        case initialTime
+        case startTime
+        case pauseStartTime
+        case totalPausedTime
+        case currentPauseDuration
+        case lastUpdateTime
     }
 
     init() {}
@@ -80,10 +101,17 @@ struct ClockStatus: Codable, Equatable {
         ntpSyncEnabled = try container.decodeIfPresent(Bool.self, forKey: .ntpSyncEnabled) ?? false
         ntpOffset = try container.decodeIfPresent(Int.self, forKey: .ntpOffset) ?? 0
         endTime = try container.decodeIfPresent(String.self, forKey: .endTime)
-        timeStamp = try container.decodeIfPresent(String.self, forKey: .timeStamp)
-        serverTime = try container.decodeIfPresent(Int.self, forKey: .serverTime)
+        timeStamp = try container.decodeIfPresent(TimeInterval.self, forKey: .timeStamp)
+        serverTime = try container.decodeIfPresent(TimeInterval.self, forKey: .serverTime)
         apiVersion = try container.decodeIfPresent(String.self, forKey: .apiVersion)
         connectionProtocol = try container.decodeIfPresent(String.self, forKey: .connectionProtocol)
+        // Decode new properties
+        initialTime = try container.decodeIfPresent(TimeValue.self, forKey: .initialTime)
+        startTime = try container.decodeIfPresent(TimeValue.self, forKey: .startTime)
+        pauseStartTime = try container.decodeIfPresent(TimeInterval.self, forKey: .pauseStartTime)
+        totalPausedTime = try container.decodeIfPresent(TimeInterval.self, forKey: .totalPausedTime)
+        currentPauseDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .currentPauseDuration)
+        lastUpdateTime = try container.decodeIfPresent(TimeInterval.self, forKey: .lastUpdateTime)
     }
 }
 
@@ -158,6 +186,18 @@ extension ClockStatus {
                 merged.apiVersion = patch.apiVersion
             case .connectionProtocol:
                 merged.connectionProtocol = patch.connectionProtocol
+            case .initialTime:
+                merged.initialTime = patch.initialTime
+            case .startTime:
+                merged.startTime = patch.startTime
+            case .pauseStartTime:
+                merged.pauseStartTime = patch.pauseStartTime
+            case .totalPausedTime:
+                merged.totalPausedTime = patch.totalPausedTime
+            case .currentPauseDuration:
+                merged.currentPauseDuration = patch.currentPauseDuration
+            case .lastUpdateTime:
+                merged.lastUpdateTime = patch.lastUpdateTime
             }
         }
 
@@ -193,16 +233,24 @@ extension ClockStatus {
         lhs.timeStamp == rhs.timeStamp &&
         lhs.serverTime == rhs.serverTime &&
         lhs.apiVersion == rhs.apiVersion &&
-        lhs.connectionProtocol == rhs.connectionProtocol
+        lhs.connectionProtocol == rhs.connectionProtocol &&
+        // Compare new properties
+        lhs.initialTime == rhs.initialTime &&
+        lhs.startTime == rhs.startTime &&
+        lhs.pauseStartTime == rhs.pauseStartTime &&
+        lhs.totalPausedTime == rhs.totalPausedTime &&
+        lhs.currentPauseDuration == rhs.currentPauseDuration &&
+        lhs.lastUpdateTime == rhs.lastUpdateTime
     }
 }
 
 extension ClockStatus {
+    // This function is no longer the primary countdown mechanism,
+    // but we'll leave it in case it's needed for other calculations.
+    // The main countdown is now driven directly by the server's WebSocket updates.
     mutating func normalizeTimers(currentDate: Date = Date()) {
         guard shouldNormalizeMainTimer,
-
               let remainingSeconds = computeMainTimerSeconds(currentDate: currentDate) else {
-
             return
         }
 
@@ -226,21 +274,18 @@ extension ClockStatus {
     }
 
     private func computeMainTimerSeconds(currentDate: Date) -> Int? {
-        let timeStampResult = ClockStatusDateParser.parseTimeStamp(timeStamp, serverTime: serverTime)
-        let offset = timeStampResult?.offset
-        let timeStampDate = timeStampResult?.date
+        let timeStampDate = timeStamp.map { Date(timeIntervalSince1970: $0 / 1000.0) }
 
-        guard let endDate = ClockStatusDateParser.parseEndTime(endTime, appliedOffset: offset) else {
+        guard let endDate = ClockStatusDateParser.parseEndTime(endTime) else {
             return nil
         }
 
         var referenceDate = currentDate
-
         if ntpSyncEnabled, ntpOffset != 0 {
             referenceDate = referenceDate.addingTimeInterval(TimeInterval(ntpOffset) / 1000.0)
         }
 
-        if let timeStampDate {
+        if let timeStampDate = timeStampDate {
             let serverRemaining = endDate.timeIntervalSince(timeStampDate)
             if serverRemaining.isFinite {
                 let elapsedSinceStamp = referenceDate.timeIntervalSince(timeStampDate)
@@ -254,114 +299,26 @@ extension ClockStatus {
     }
 }
 
+
 private enum ClockStatusDateParser {
-    private static let iso8601WithFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    private static let iso8601: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
-    private static let fallbackFormatters: [DateFormatter] = {
-        let patterns = [
-            "yyyy-MM-dd HH:mm:ss.SSSSSS",
-            "yyyy-MM-dd HH:mm:ss",
-            "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",
-            "yyyy-MM-dd'T'HH:mm:ss"
-        ]
-
-        var formatters: [DateFormatter] = []
-
-        for pattern in patterns {
-            let utcFormatter = DateFormatter()
-            utcFormatter.locale = Locale(identifier: "en_US_POSIX")
-            utcFormatter.timeZone = TimeZone(secondsFromGMT: 0)
-            utcFormatter.dateFormat = pattern
-            formatters.append(utcFormatter)
-
-            let localFormatter = DateFormatter()
-            localFormatter.locale = Locale(identifier: "en_US_POSIX")
-            localFormatter.timeZone = TimeZone.current
-            localFormatter.dateFormat = pattern
-            formatters.append(localFormatter)
-        }
-
-        return formatters
-    }()
-
-    static func parseTimeStamp(_ timeStamp: String?, serverTime: Int?) -> (date: Date, offset: TimeInterval)? {
-        let parsed = parse(timeStamp)
-
-        if let parsed {
-            if let serverTime {
-                let serverDate = date(fromServerTime: serverTime)
-                let delta = serverDate.timeIntervalSince(parsed)
-                if abs(delta) > 1 {
-                    return (parsed.addingTimeInterval(delta), delta)
-                }
-            }
-
-            return (parsed, 0)
-        }
-
-        if let serverTime {
-            let serverDate = date(fromServerTime: serverTime)
-            return (serverDate, 0)
-        }
-
-        return nil
-    }
-
-    static func parseEndTime(_ endTime: String?, appliedOffset: TimeInterval?) -> Date? {
-        guard var date = parse(endTime) else { return nil }
-
-        if let offset = appliedOffset, abs(offset) > 1 {
-            date = date.addingTimeInterval(offset)
-        }
-
-        return date
-    }
-
-    private static func parse(_ string: String?) -> Date? {
-        guard let string = string, !string.isEmpty else { return nil }
-
-        if let date = iso8601WithFractional.date(from: string) {
-            return date
-        }
-
-        if let date = iso8601.date(from: string) {
-            return date
-        }
-
-        for formatter in fallbackFormatters {
-            if let date = formatter.date(from: string) {
-                return date
-            }
-        }
+    // We are simplifying this since the server is providing numeric timestamps.
+    // This is more robust.
+    static func parseEndTime(_ endTime: String?) -> Date? {
+        guard let string = endTime, !string.isEmpty else { return nil }
 
         if let numericValue = Double(string) {
-
-            if numericValue > 9_999_999_999 {
-
-                return Date(timeIntervalSince1970: numericValue / 1000.0)
-            }
-
-            return Date(timeIntervalSince1970: numericValue)
+            return Date(timeIntervalSince1970: numericValue / 1000.0)
         }
 
-        return nil
-    }
-
-    private static func date(fromServerTime serverTime: Int) -> Date {
-        if serverTime > 9_999_999_999 {
-            return Date(timeIntervalSince1970: TimeInterval(serverTime) / 1000.0)
+        // Fallback for ISO 8601 date strings if the server ever changes format
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: string) {
+            return date
         }
-
-        return Date(timeIntervalSince1970: TimeInterval(serverTime))
+        
+        let basicFormatter = ISO8601DateFormatter()
+        basicFormatter.formatOptions = [.withInternetDateTime]
+        return basicFormatter.date(from: string)
     }
 }

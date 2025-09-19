@@ -40,13 +40,13 @@ class SettingsViewModel: ObservableObject {
         // Save the settings locally first
         saveSettings()
         
+        // Reset the server to a clean state before applying the new settings.
+        try? await clockViewModel.reset()
+        
         // Apply settings via API calls
         try await clockViewModel.setTime(minutes: minutes, seconds: seconds)
         try await clockViewModel.setRounds(totalRounds)
         try await clockViewModel.setBetweenRounds(enabled: betweenRoundsEnabled, time: betweenRoundsTime)
-        
-        // Reset the server's state to ensure it adopts the new settings
-        try? await clockViewModel.reset()
         
         // Fetch the full status to ensure the UI is in sync
         try? await clockViewModel.fetchStatus()

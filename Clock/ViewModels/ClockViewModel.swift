@@ -11,7 +11,7 @@ final class ClockViewModel: ObservableObject {
     
     private var webSocket: ClockWebSocket?
     private var api: ClockAPI?
-    private var countdownTimer: Timer?
+    private var hasAttemptedConnection = false
     
     init() {
         // Load saved server settings
@@ -24,6 +24,9 @@ final class ClockViewModel: ObservableObject {
     }
     
     func connect() {
+        guard !hasAttemptedConnection else { return }
+        hasAttemptedConnection = true
+        
         // Save server settings
         UserDefaults.standard.set(serverHost, forKey: "serverHost")
         UserDefaults.standard.set(serverPort, forKey: "serverPort")
@@ -33,44 +36,46 @@ final class ClockViewModel: ObservableObject {
         
         let newWebSocket = ClockWebSocket()
         newWebSocket.onConnectionChanged = { [weak self] connected in
-            self?.isConnected = connected
+            DispatchQueue.main.async {
+                self?.isConnected = connected
+            }
         }
-        newWebSocket.onStatusPatch = { [weak self] patch in
-            self?.applyStatusPatch(patch)
+        newWebSocket.onStatusUpdate = { [weak self] newStatus in
+            DispatchQueue.main.async {
+                if self?.status != newStatus {
+                    self?.status = newStatus
+                }
+            }
         }
         self.webSocket = newWebSocket
 
         // Connect WebSocket
         newWebSocket.connect(host: serverHost, port: serverPort)
         
-        // Fetch initial status
+        // Always sync the app's settings to the server upon connection.
         Task {
+            await syncSettingsToServer()
             do {
                 try await fetchStatus()
             } catch {
-                print("Failed to fetch initial status: \(error.localizedDescription)")
+                print("Failed to fetch initial status after sync: \(error.localizedDescription)")
             }
         }
     }
     
-    private func applyStatusPatch(_ patch: ClockStatus) {
-        var mutablePatch = patch
-        let now = Date()
-        mutablePatch.normalizeTimers(currentDate: now)
-
-        if var currentStatus = self.status {
-            var merged = currentStatus.merging(mutablePatch)
-            merged.normalizeTimers(currentDate: now)
-            self.status = merged
-        } else {
-            self.status = mutablePatch
-        }
+    private func syncSettingsToServer() async {
+        print("Syncing app settings to server...")
         
-        // Manage the countdown timer based on the new status
-        if self.status?.isRunning == true && self.status?.isPaused == false {
-            startTimer()
-        } else {
-            stopTimer()
+        let settings = SettingsViewModel()
+        
+        do {
+            try await api?.reset()
+            try await api?.setTime(minutes: settings.minutes, seconds: settings.seconds)
+            try await api?.setRounds(settings.totalRounds)
+            try await api?.setBetweenRounds(enabled: settings.betweenRoundsEnabled, time: settings.betweenRoundsTime)
+            print("Server sync complete.")
+        } catch {
+            print("Failed to sync settings to server: \(error.localizedDescription)")
         }
     }
     
@@ -79,89 +84,28 @@ final class ClockViewModel: ObservableObject {
         webSocket = nil
         api = nil
         self.isConnected = false
-        self.status = nil
-        stopTimer()
+        // Don't nil out the status immediately to prevent flicker
+        hasAttemptedConnection = false
     }
     
     func fetchStatus() async throws {
         guard let api = api else { return }
         let newStatus = try await api.fetchStatus()
-        applyStatusPatch(newStatus)
-    }
-    
-    private func startTimer() {
-        // Ensure we don't have multiple timers running
-        stopTimer()
-        // Start a new timer that updates the countdown every second
-        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.updateCountdown()
+        DispatchQueue.main.async {
+            self.status = newStatus
         }
     }
     
-    private func stopTimer() {
-        countdownTimer?.invalidate()
-        countdownTimer = nil
-    }
-
-    private func updateCountdown() {
-        // Manually decrement the timer for a smooth countdown
-        guard status != nil, status!.isRunning, !status!.isPaused else {
-            stopTimer()
-            return
-        }
-
-        if status!.seconds > 0 {
-            status!.seconds -= 1
-        } else if status!.minutes > 0 {
-            status!.minutes -= 1
-            status!.seconds = 59
-        } else {
-            // Timer has reached zero, stop the local countdown.
-            // The server will send a new status (e.g., between rounds).
-            stopTimer()
-        }
-    }
-
-    // All actions simply send a command. The UI will update when the new
-    // status arrives via the WebSocket.
+    // MARK: - API Actions
     
-    func start() async throws {
-        try await api?.start()
-    }
-    
-    func pause() async throws {
-        try await api?.pause()
-    }
-    
-    func reset() async throws {
-        try await api?.reset()
-    }
-    
-    func resetTime() async throws {
-        try await api?.resetTime()
-    }
-    
-    func resetRounds() async throws {
-        try await api?.resetRounds()
-    }
-    
-    func nextRound() async throws {
-        try await api?.nextRound()
-    }
-    
-    func previousRound() async throws {
-        try await api?.previousRound()
-    }
-    
-    func setTime(minutes: Int, seconds: Int) async throws {
-        try await api?.setTime(minutes: minutes, seconds: seconds)
-    }
-    
-    func setRounds(_ rounds: Int) async throws {
-        try await api?.setRounds(rounds)
-    }
-    
-    func setBetweenRounds(enabled: Bool, time: Int) async throws {
-        try await api?.setBetweenRounds(enabled: enabled, time: time)
-    }
+    func start() async throws { try await api?.start() }
+    func pause() async throws { try await api?.pause() }
+    func reset() async throws { try await api?.reset() }
+    func resetTime() async throws { try await api?.resetTime() }
+    func resetRounds() async throws { try await api?.resetRounds() }
+    func nextRound() async throws { try await api?.nextRound() }
+    func previousRound() async throws { try await api?.previousRound() }
+    func setTime(minutes: Int, seconds: Int) async throws { try await api?.setTime(minutes: minutes, seconds: seconds) }
+    func setRounds(_ rounds: Int) async throws { try await api?.setRounds(rounds) }
+    func setBetweenRounds(enabled: Bool, time: Int) async throws { try await api?.setBetweenRounds(enabled: enabled, time: time) }
 }
