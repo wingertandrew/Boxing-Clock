@@ -175,6 +175,9 @@ struct ControlView: View {
 
     private func getStatusColor() -> Color {
         guard let status = clockViewModel.status, status.isRunning else { return .gray }
+        if status.isBetweenRounds {
+            return .purple
+        }
         return status.isPaused ? .yellow : .green
     }
 }
