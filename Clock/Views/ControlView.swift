@@ -1,17 +1,19 @@
+import Foundation
 import SwiftUI
 
 struct ControlView: View {
     @EnvironmentObject private var clockViewModel: ClockViewModel
-    
+    @State private var pendingTotalSeconds: Int?
+
     private var isTimerRunning: Bool {
         clockViewModel.status?.isRunning == true && !clockViewModel.status!.isPaused
     }
-    
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 Color.black.edgesIgnoringSafeArea(.all)
-                
+
                 VStack {
                     elapsedTimeView()
                         .padding(.top, 30)
@@ -53,6 +55,9 @@ struct ControlView: View {
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 
             }
+        }
+        .onChange(of: clockViewModel.status) { _ in
+            pendingTotalSeconds = nil
         }
         .statusBar(hidden: true)
     }
@@ -133,8 +138,12 @@ struct ControlView: View {
     private func controlButtons() -> some View {
         HStack(spacing: 6) {
             Group {
-                controlButton(systemName: "minus") {}
-                controlButton(systemName: "plus") {}
+                repeatControlButton(systemName: "minus") {
+                    adjustTime(by: -1)
+                }
+                repeatControlButton(systemName: "plus") {
+                    adjustTime(by: 1)
+                }
                 controlButton(systemName: "backward.end.fill") {
                     Task { try? await clockViewModel.previousRound() }
                 }
@@ -154,6 +163,112 @@ struct ControlView: View {
     
     private func controlButton(systemName: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
+            ControlButtonLabel(systemName: systemName)
+        }
+    }
+
+    private func repeatControlButton(systemName: String, action: @escaping () -> Void) -> some View {
+        RepeatControlButton(systemName: systemName, action: action)
+    }
+
+    private func adjustTime(by deltaSeconds: Int) {
+        let currentTotalSeconds: Int?
+
+        if let pendingTotalSeconds {
+            currentTotalSeconds = pendingTotalSeconds
+        } else if let status = clockViewModel.status {
+            currentTotalSeconds = status.minutes * 60 + status.seconds
+        } else {
+            currentTotalSeconds = nil
+        }
+
+        guard let currentTotalSeconds else { return }
+
+        let newTotalSeconds = max(currentTotalSeconds + deltaSeconds, 0)
+
+        guard newTotalSeconds != currentTotalSeconds else { return }
+
+        pendingTotalSeconds = newTotalSeconds
+
+        let minutes = newTotalSeconds / 60
+        let seconds = newTotalSeconds % 60
+
+        Task { @MainActor in
+            do {
+                try await clockViewModel.setTime(minutes: minutes, seconds: seconds)
+            } catch {
+                print("Failed to adjust time: \(error.localizedDescription)")
+                pendingTotalSeconds = nil
+            }
+        }
+    }
+
+    private struct RepeatControlButton: View {
+        let systemName: String
+        let action: () -> Void
+
+        @State private var repeatTimer: Timer?
+        @State private var ignoreTap = false
+        @Environment(\.isEnabled) private var isEnabled
+
+        var body: some View {
+            Button {
+                if ignoreTap {
+                    ignoreTap = false
+                } else {
+                    action()
+                }
+            } label: {
+                ControlButtonLabel(systemName: systemName)
+            }
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.35)
+                    .onChanged { _ in
+                        startRepeating()
+                    }
+                    .onEnded { _ in
+                        stopRepeating()
+                    }
+            )
+            .onChange(of: isEnabled) { enabled in
+                if !enabled {
+                    stopRepeating()
+                }
+            }
+            .onDisappear {
+                stopRepeating()
+            }
+        }
+
+        private func startRepeating() {
+            guard repeatTimer == nil else { return }
+
+            ignoreTap = true
+            action()
+
+            let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                action()
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            repeatTimer = timer
+        }
+
+        private func stopRepeating() {
+            repeatTimer?.invalidate()
+            repeatTimer = nil
+
+            if ignoreTap {
+                DispatchQueue.main.async {
+                    ignoreTap = false
+                }
+            }
+        }
+    }
+
+    private struct ControlButtonLabel: View {
+        let systemName: String
+
+        var body: some View {
             Image(systemName: systemName)
                 .font(.title2)
                 .frame(minWidth: 80, minHeight: 50)
@@ -162,7 +277,7 @@ struct ControlView: View {
                 .cornerRadius(10)
         }
     }
-    
+
     private func getStatusText() -> String {
         guard let status = clockViewModel.status else { return "READY" }
         if status.isBetweenRounds { return "BETWEEN ROUNDS" }
