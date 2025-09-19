@@ -72,21 +72,22 @@ struct ControlView: View {
         .cornerRadius(12)
     }
     
-    @ViewBuilder
     private func mainTimerView() -> some View {
-        if let status = clockViewModel.status {
-            Text(String(format: "%02d:%02d", status.minutes, status.seconds))
-                .digitalFont(size: 150)
-                .foregroundColor(.white)
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
-        } else {
-            Text("00:00")
-                .digitalFont(size: 150)
-                .foregroundColor(.white)
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
-        }
+        let displayText = clockViewModel.status
+            .map { String(format: "%02d:%02d", $0.minutes, $0.seconds) }
+            ?? "00:00"
+
+        return Text(displayText)
+            .digitalFont(size: 150)
+            .foregroundColor(.white)
+            .minimumScaleFactor(0.5)
+            .lineLimit(1)
+            .padding(.horizontal, 60)
+            .padding(.vertical, 30)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(getStatusColor(), lineWidth: 10)
+            )
     }
     
     @ViewBuilder
