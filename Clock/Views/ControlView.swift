@@ -129,7 +129,7 @@ struct ControlView: View {
     
     @ViewBuilder
     private func controlButtons() -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 6) {
             Group {
                 controlButton(systemName: "minus") {}
                 controlButton(systemName: "plus") {}
@@ -154,7 +154,7 @@ struct ControlView: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.title2)
-                .frame(minWidth: 50, minHeight: 50)
+                .frame(minWidth: 80, minHeight: 50)
                 .background(Color.gray.opacity(0.5))
                 .foregroundColor(.white)
                 .cornerRadius(10)
