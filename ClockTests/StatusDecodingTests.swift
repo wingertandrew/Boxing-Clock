@@ -46,4 +46,26 @@ final class StatusDecodingTests: XCTestCase {
         XCTAssertEqual(mergedStatus.seconds, 45)
         XCTAssertEqual(mergedStatus.currentRound, 3)
     }
+
+    @MainActor
+    func testActionAcknowledgementDoesNotResetTimer() throws {
+        let viewModel = ClockViewModel()
+
+        var initialStatus = ClockStatus()
+        initialStatus.minutes = 3
+        initialStatus.seconds = 15
+        initialStatus.isRunning = true
+
+        viewModel.status = initialStatus
+
+        let payload = Data(#"{"type":"ack","status":{"isRunning":false}}"#.utf8)
+        let message = try decoder.decode(WSMessage.self, from: payload)
+        let patch = try XCTUnwrap(message.data)
+
+        viewModel.applyStatusPatch(patch)
+
+        XCTAssertEqual(viewModel.status?.minutes, 3)
+        XCTAssertEqual(viewModel.status?.seconds, 15)
+        XCTAssertEqual(viewModel.status?.isRunning, false)
+    }
 }
