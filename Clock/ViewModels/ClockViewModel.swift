@@ -40,11 +40,9 @@ final class ClockViewModel: ObservableObject {
                 self?.isConnected = connected
             }
         }
-        newWebSocket.onStatusUpdate = { [weak self] newStatus in
+        newWebSocket.onStatusUpdate = { [weak self] patch in
             DispatchQueue.main.async {
-                if self?.status != newStatus {
-                    self?.status = newStatus
-                }
+                self?.applyStatusPatch(patch)
             }
         }
         self.webSocket = newWebSocket
@@ -95,7 +93,18 @@ final class ClockViewModel: ObservableObject {
             self.status = newStatus
         }
     }
-    
+
+    func applyStatusPatch(_ patch: ClockStatus) {
+        if let existingStatus = status {
+            let mergedStatus = existingStatus.merging(patch)
+            if mergedStatus != existingStatus {
+                status = mergedStatus
+            }
+        } else {
+            status = patch
+        }
+    }
+
     // MARK: - API Actions
     
     func start() async throws { try await api?.start() }
