@@ -79,7 +79,7 @@ struct ControlView: View {
             ?? "00:00"
 
         return Text(displayText)
-            .digitalFont(size: 150)
+            .digitalFont(size: 150, weight: .black)
             .foregroundColor(.white)
             .minimumScaleFactor(0.5)
             .lineLimit(1)
@@ -125,7 +125,7 @@ struct ControlView: View {
                 Text("ROUND 0 of 0")
             }
         }
-        .digitalFont(size: 32)
+        .digitalFont(size: 44)
         .foregroundColor(.white)
     }
     
