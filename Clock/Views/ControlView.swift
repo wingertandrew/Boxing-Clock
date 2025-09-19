@@ -36,15 +36,16 @@ struct ControlView: View {
                                 }
                             }
                         }
-                    
+
+                    roundInfoView()
+                        .padding(.top, 12)
+
                     Spacer()
-                    
-                    HStack {
-                        connectionInfoView()
-                        Spacer()
-                        roundInfoView()
-                    }
-                    .padding(.horizontal, 30)
+
+                    connectionInfoView()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 30)
+                        .padding(.bottom, 12)
 
                     controlButtons()
                         .padding(.bottom, 30)
@@ -124,7 +125,7 @@ struct ControlView: View {
                 Text("ROUND 0 of 0")
             }
         }
-        .digitalFont(size: 24)
+        .digitalFont(size: 32)
         .foregroundColor(.white)
     }
     
