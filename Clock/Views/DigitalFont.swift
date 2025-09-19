@@ -5,7 +5,7 @@ struct DigitalFont: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .font(.custom("DS-Digital", size: size))
+            .font(.custom("UFCSans-Bold", size: size))
             .monospacedDigit()
     }
 }
