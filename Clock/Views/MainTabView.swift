@@ -41,14 +41,11 @@ struct MainTabView: View {
     @ViewBuilder
     private func destinationView(for destination: MainDestination) -> some View {
         switch destination {
-        case .connection:
-            ConnectionView()
+        case .connections:
+            ConnectionsView()
                 .environmentObject(clockViewModel)
         case .control:
             ControlView()
-                .environmentObject(clockViewModel)
-        case .settings:
-            SettingsView()
                 .environmentObject(clockViewModel)
         case .status:
             StatusView()
@@ -60,24 +57,21 @@ struct MainTabView: View {
 }
 
 private enum MainDestination: String, CaseIterable, Hashable {
-    case connection
+    case connections
     case control
-    case settings
     case status
     case digitalFont
 
     static var navigationOptions: [MainDestination] {
-        [.connection, .control, .settings, .status, .digitalFont]
+        [.connections, .control, .status, .digitalFont]
     }
 
     var title: String {
         switch self {
-        case .connection:
-            return "Connection"
+        case .connections:
+            return "Connections"
         case .control:
             return "Control"
-        case .settings:
-            return "Settings"
         case .status:
             return "Status"
         case .digitalFont:
