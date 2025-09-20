@@ -44,6 +44,9 @@ struct MainTabView: View {
         case .connections:
             ConnectionsView()
                 .environmentObject(clockViewModel)
+        case .timeConfig:
+            TimeConfigView()
+                .environmentObject(clockViewModel)
         case .control:
             ControlView()
                 .environmentObject(clockViewModel)
@@ -58,18 +61,21 @@ struct MainTabView: View {
 
 private enum MainDestination: String, CaseIterable, Hashable {
     case connections
+    case timeConfig
     case control
     case status
     case digitalFont
 
     static var navigationOptions: [MainDestination] {
-        [.connections, .control, .status, .digitalFont]
+        [.connections, .timeConfig, .control, .status, .digitalFont]
     }
 
     var title: String {
         switch self {
         case .connections:
             return "Connections"
+        case .timeConfig:
+            return "Time Config"
         case .control:
             return "Control"
         case .status:
