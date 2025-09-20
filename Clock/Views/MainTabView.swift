@@ -44,6 +44,9 @@ struct MainTabView: View {
         case .settings:
             SettingsHubView()
                 .environmentObject(clockViewModel)
+        case .timeConfig:
+            TimeConfigView()
+                .environmentObject(clockViewModel)
         case .control:
             ControlView()
                 .environmentObject(clockViewModel)
@@ -54,18 +57,24 @@ struct MainTabView: View {
 }
 
 private enum MainDestination: String, CaseIterable, Hashable {
+
     case settings
+
     case control
     case digitalFont
 
     static var navigationOptions: [MainDestination] {
+
         [.settings, .control, .digitalFont]
+
     }
 
     var title: String {
         switch self {
+
         case .settings:
             return "Settings"
+
         case .control:
             return "Control"
         case .digitalFont:
